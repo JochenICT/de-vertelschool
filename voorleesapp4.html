@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>De Vertelschool - Multi-Track Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
+    
+    <style>
+        :root { --primary: #4a90e2; --secondary: #2ecc71; --danger: #e74c3c; --warning: #f39c12; --dark: #2c3e50; --bg: #f0f2f5; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; display: flex; min-height: 100vh; overflow-x: auto; }
+        
+        /* ZIJBALK */
+        .sidebar { width: 250px; background: white; padding: 40px 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; text-align: center; position: fixed; height: 100%; z-index: 100; }
+        .sidebar h1 { font-size: 22px; color: var(--dark); margin-bottom: 10px; font-weight: 800; }
+        .sidebar p { font-size: 14px; color: #666; line-height: 1.4; }
+        .school-logo { max-width: 140px; height: auto; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+        
+        /* HOOFDCONTAINER */
+        .main-wrapper { margin-left: 290px; padding: 30px; display: flex; flex-direction: row; gap: 20px; width: calc(100% - 320px); min-width: 950px; }
+        .content-column { flex: 3; display: flex; flex-direction: column; }
+        .right-column { flex: 2; display: flex; flex-direction: column; gap: 20px; min-width: 320px; }
+        
+        .side-photo { width: 100%; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); object-fit: cover; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h3 { margin-top: 0; color: var(--dark); font-size: 18px; margin-bottom: 5px; }
+        .instruction-text { font-size: 0.85rem; color: #666; margin-bottom: 15px; line-height: 1.4; }
+
+        .track-container { margin-bottom: 20px; padding: 15px; border: 1px solid #edf2f7; border-radius: 12px; background: #fff; }
+        .track-label { font-weight: bold; margin-bottom: 8px; color: var(--primary); font-size: 14px; }
+        .waveform-box { background: #f8f9fa; border-radius: 8px; margin: 8px 0; border: 1px solid #ddd; min-height: 80px; cursor: crosshair; }
+        
+        .controls, .edit-tools { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .edit-tools { padding: 8px; background: #f1f5f9; border-radius: 8px; justify-content: center; }
+        
+        button { font-weight: 600; padding: 8px 12px; cursor: pointer; border-radius: 6px; border: none; transition: 0.2s; color: white; font-size: 11px; }
+        .btn-rec { background-color: var(--danger); }
+        .btn-stop { background-color: var(--dark); }
+        .btn-play { background-color: var(--primary); }
+        .btn-cut { background-color: var(--warning); }
+        .btn-delete { background-color: var(--danger); }
+        .btn-paste { background-color: var(--primary); }
+        
+        #mixDownload { background-color: var(--secondary); width: 100%; margin-top: 15px; font-size: 14px; padding: 12px; border-radius: 10px; }
+        
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 13px; }
+        #qrcode { margin-top: 15px; display: flex; justify-content: center; background: #f8f9fa; padding: 10px; border-radius: 10px; min-height: 100px; }
+        #loading { display: none; color: var(--primary); font-weight: bold; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h1>De Vertelschool</h1>
+    <p>Maak een eenvoudig luisterfragment voor je klas.</p>
+    <img src="logo.png" id="schoolLogo" alt="School Logo" class="school-logo" onerror="this.src='https://img.icons8.com/fluency/180/owl.png'">
+</div>
+
+<div class="main-wrapper">
+    <div class="content-column">
+        <div class="card">
+            <h3>Stap 1: Spreek je verhaal in en bewerk</h3>
+            
+            <div class="track-container">
+                <div class="track-label">Spoor 1</div>
+                <div id="waveform1" class="waveform-box"></div>
+                <div class="controls">
+                    <button id="rec1" class="btn-rec">⏺ Opnemen</button>
+                    <button id="stop1" class="btn-stop" disabled>⏹ Stop</button>
+                    <button id="play1" class="btn-play" disabled>▶ Afspelen</button>
+                </div>
+                <div class="edit-tools">
+                    <button id="cut1" class="btn-cut" disabled>✂ Knippen</button>
+                    <button id="del1" class="btn-delete" disabled>🗑 Verwijderen</button>
+                    <button id="pst1" class="btn-paste" disabled>📋 Plakken</button>
+                </div>
+            </div>
+
+            <div class="track-container">
+                <div class="track-label">Spoor 2</div>
+                <div id="waveform2" class="waveform-box"></div>
+                <div class="controls">
+                    <button id="rec2" class="btn-rec">⏺ Opnemen</button>
+                    <button id="stop2" class="btn-stop" disabled>⏹ Stop</button>
+                    <button id="play2" class="btn-play" disabled>▶ Afspelen</button>
+                </div>
+                <div class="edit-tools">
+                    <button id="cut2" class="btn-cut" disabled>✂ Knippen</button>
+                    <button id="del2" class="btn-delete" disabled>🗑 Verwijderen</button>
+                    <button id="pst2" class="btn-paste" disabled>📋 Plakken</button>
+                </div>
+            </div>
+
+            <button id="mixDownload" disabled>💾 Mix sporen & Download MP3</button>
+            <div id="loading">Bezig met mixen...</div>
+        </div>
+    </div>
+
+    <div class="right-column">
+        <img src="foto.jpeg" alt="Sfeerfoto" class="side-photo" onerror="this.src='https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=400&q=80'">
+        <div class="card">
+            <h3>Stap 2: Maak de QR-code</h3>
+            <div class="instruction-text">Upload je MP3 naar bijv. Google Drive en plak de 'deel-link' hieronder:</div>
+            <input type="text" id="urlInput" placeholder="https://drive.google.com/...">
+            <button id="generate" style="background: var(--primary); width: 100%; color: white; padding: 12px; border-radius: 8px; border: none; font-weight: bold;">Genereer QR-code</button>
+            <div id="qrcode"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let audioContext;
+    let ws1, ws2, reg1, reg2;
+    let buf1 = null, buf2 = null, clipboard = null;
+    let mediaRecorder, chunks = [];
+    let sharedStream = null;
+
+    const opt = { waveColor: '#A0AEC0', progressColor: '#4A90E2', height: 80, minPxPerSec: 35 };
+    ws1 = WaveSurfer.create({ ...opt, container: '#waveform1' });
+    ws2 = WaveSurfer.create({ ...opt, container: '#waveform2' });
+    
+    reg1 = ws1.registerPlugin(WaveSurfer.Regions.create());
+    reg2 = ws2.registerPlugin(WaveSurfer.Regions.create());
+    
+    reg1.enableDragSelection({ color: 'rgba(74, 144, 226, 0.3)' });
+    reg2.enableDragSelection({ color: 'rgba(74, 144, 226, 0.3)' });
+
+    ws1.on('click', () => reg1.clearRegions());
+    ws2.on('click', () => reg2.clearRegions());
+
+    async function startRec(t) {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+
+        try {
+            if (!sharedStream) {
+                sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+            
+            mediaRecorder = new MediaRecorder(sharedStream);
+            chunks = [];
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'audio/wav' });
+                const arrayBuf = await blob.arrayBuffer();
+                const decoded = await audioContext.decodeAudioData(arrayBuf);
+                if (t === 1) { buf1 = decoded; updateWs(1); } else { buf2 = decoded; updateWs(2); }
+                document.getElementById('mixDownload').disabled = false;
+            };
+
+            mediaRecorder.start();
+            document.getElementById(`rec${t}`).disabled = true;
+            document.getElementById(`stop${t}`).disabled = false;
+            document.getElementById(`rec${t}`).innerText = "🔴 Bezig...";
+        } catch (err) {
+            alert("Microfoon fout: " + err.message);
+        }
+    }
+
+    function stopRec(t) {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            document.getElementById(`rec${t}`).disabled = false;
+            document.getElementById(`stop${t}`).disabled = true;
+            document.getElementById(`rec${t}`).innerText = "⏺ Opnemen";
+        }
+    }
+
+    function updateWs(t) {
+        const targetWs = (t === 1) ? ws1 : ws2;
+        const targetBuf = (t === 1) ? buf1 : buf2;
+        const wav = bufferToWav(targetBuf);
+        targetWs.loadBlob(new Blob([wav], { type: 'audio/wav' }));
+        document.getElementById(`play${t}`).disabled = false;
+        document.getElementById(`cut${t}`).disabled = false;
+        document.getElementById(`del${t}`).disabled = false;
+    }
+
+    function deletePart(t) {
+        const r = (t === 1) ? reg1 : reg2;
+        const region = Object.values(r.getRegions())[0];
+        if (!region) return alert("Selecteer eerst een stukje!");
+        let b = (t === 1) ? buf1 : buf2;
+        const sF = Math.floor(region.start * b.sampleRate), eF = Math.floor(region.end * b.sampleRate);
+        const newB = audioContext.createBuffer(b.numberOfChannels, b.length - (eF - sF), b.sampleRate);
+        for (let i = 0; i < b.numberOfChannels; i++) {
+            const oldC = b.getChannelData(i), newC = newB.getChannelData(i);
+            newC.set(oldC.subarray(0, sF)); newC.set(oldC.subarray(eF), sF);
+        }
+        if (t === 1) buf1 = newB; else buf2 = newB;
+        r.clearRegions(); updateWs(t);
+    }
+
+    function cutPart(t) {
+        const r = (t === 1) ? reg1 : reg2;
+        const region = Object.values(r.getRegions())[0];
+        if (!region) return;
+        let b = (t === 1) ? buf1 : buf2;
+        const sF = Math.floor(region.start * b.sampleRate), eF = Math.floor(region.end * b.sampleRate);
+        clipboard = audioContext.createBuffer(b.numberOfChannels, eF - sF, b.sampleRate);
+        for (let i = 0; i < b.numberOfChannels; i++) { clipboard.getChannelData(i).set(b.getChannelData(i).subarray(sF, eF)); }
+        document.getElementById('pst1').disabled = false; document.getElementById('pst2').disabled = false;
+        deletePart(t);
+    }
+
+    function pastePart(t) {
+        if (!clipboard) return;
+        let b = (t === 1) ? buf1 : buf2;
+        if (!b) return;
+        const targetWs = (t === 1) ? ws1 : ws2;
+        const cursorF = Math.floor(targetWs.getCurrentTime() * b.sampleRate);
+        const newB = audioContext.createBuffer(b.numberOfChannels, b.length + clipboard.length, b.sampleRate);
+        for (let i = 0; i < b.numberOfChannels; i++) {
+            const oldC = b.getChannelData(i), clipC = clipboard.getChannelData(i), newC = newB.getChannelData(i);
+            newC.set(oldC.subarray(0, cursorF)); newC.set(clipC, cursorF); newC.set(oldC.subarray(cursorF), cursorF + clipboard.length);
+        }
+        if (t === 1) buf1 = newB; else buf2 = newB;
+        updateWs(t);
+    }
+
+    document.getElementById('rec1').onclick = () => startRec(1);
+    document.getElementById('stop1').onclick = () => stopRec(1);
+    document.getElementById('play1').onclick = () => ws1.playPause();
+    document.getElementById('del1').onclick = () => deletePart(1);
+    document.getElementById('cut1').onclick = () => cutPart(1);
+    document.getElementById('pst1').onclick = () => pastePart(1);
+
+    document.getElementById('rec2').onclick = () => startRec(2);
+    document.getElementById('stop2').onclick = () => stopRec(2);
+    document.getElementById('play2').onclick = () => ws2.playPause();
+    document.getElementById('del2').onclick = () => deletePart(2);
+    document.getElementById('cut2').onclick = () => cutPart(2);
+    document.getElementById('pst2').onclick = () => pastePart(2);
+
+    document.getElementById('mixDownload').onclick = function() {
+        document.getElementById('loading').style.display = 'block';
+        setTimeout(() => {
+            const mixed = mix(buf1, buf2);
+            const mp3 = bufferToMp3(mixed);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(mp3);
+            a.download = 'vertelschool_mix.mp3'; a.click();
+            document.getElementById('loading').style.display = 'none';
+        }, 100);
+    };
+
+    function mix(b1, b2) {
+        const len = Math.max(b1?b1.length:0, b2?b2.length:0);
+        const sr = b1?b1.sampleRate:b2.sampleRate;
+        const mixB = audioContext.createBuffer(1, len, sr);
+        const out = mixB.getChannelData(0);
+        for (let i=0; i<len; i++) {
+            let s = 0;
+            if(b1 && i<b1.length) s += b1.getChannelData(0)[i];
+            if(b2 && i<b2.length) s += b2.getChannelData(0)[i];
+            out[i] = s / (b1&&b2?1.5:1);
+        }
+        return mixB;
+    }
+
+    function bufferToMp3(buffer) {
+        const mp3encoder = new lamejs.Mp3Encoder(1, buffer.sampleRate, 128);
+        const mp3Data = [];
+        const samples = buffer.getChannelData(0);
+        const samplesInt16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) { samplesInt16[i] = samples[i] < 0 ? samples[i] * 0x8000 : samples[i] * 0x7FFF; }
+        const blockSize = 1152;
+        for (let i = 0; i < samplesInt16.length; i += blockSize) {
+            const chunk = samplesInt16.subarray(i, i + blockSize);
+            const mp3buf = mp3encoder.encodeBuffer(chunk);
+            if (mp3buf.length > 0) mp3Data.push(mp3buf);
+        }
+        const end = mp3encoder.flush();
+        if (end.length > 0) mp3Data.push(end);
+        return new Blob(mp3Data, { type: 'audio/mp3' });
+    }
+
+    function bufferToWav(buffer) {
+        const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+        const view = new DataView(new ArrayBuffer(length));
+        let pos = 0;
+        const setUint32 = d => { view.setUint32(pos, d, true); pos += 4; };
+        const setUint16 = d => { view.setUint16(pos, d, true); pos += 2; };
+        setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+        setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(buffer.numberOfChannels);
+        setUint32(buffer.sampleRate); setUint32(buffer.sampleRate * 4); setUint16(buffer.numberOfChannels * 2); setUint16(16);
+        setUint32(0x61746164); setUint32(length - pos - 4);
+        for(let offset=0; offset<buffer.length; offset++) {
+            for(let i=0; i<buffer.numberOfChannels; i++) {
+                let s = Math.max(-1, Math.min(1, buffer.getChannelData(i)[offset]));
+                view.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7FFF, true); pos += 2;
+            }
+        }
+        return view.buffer;
+    }
+
+    document.getElementById('generate').onclick = () => {
+        const val = document.getElementById('urlInput').value.trim();
+        if(!val) return alert("Plak eerst een link!");
+        document.getElementById('qrcode').innerHTML = "";
+        new QRCode(document.getElementById('qrcode'), { text: val, width: 180, height: 180 });
+    };
+</script>
+</body>
+</html>
